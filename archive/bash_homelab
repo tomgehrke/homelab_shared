@@ -1,0 +1,104 @@
+#!/bin/bash
+
+# Loads all Homelab support upon login
+# This file needs to be sourced from either .bashrc or .bash_profile
+
+# Environment
+export EDITOR="nano"
+
+# make sure homelab is up to date
+if [[ -d "$HOMELAB" ]] ; then
+
+  packageManager=""
+  # Determine Package Manager
+  managers=("apt" "dnf")
+  for manager in "${managers[@]}"; do
+    if command -v "$manager" &>/dev/null; then
+      packageManager="$manager"
+      break
+    fi
+    echo "No supported package managers found. Nothing will be installed."
+  done
+
+  if [[ $packageManager = "apt" ]]; then
+    installed_apps="$(apt list --installed 2>/dev/null)"
+  #elif [[ $packageManager = "dnf" ]]; then
+    #TODO: Add DNF support
+  fi
+
+  # Checking for required applications
+  install_app=""
+  if ! echo "$installed_apps" | grep "^screenfetch/" >/dev/null 2>&1; then
+    install_app+="screenfetch "
+  fi
+
+  if ! echo "$installed_apps" | grep "^ncdu/" >/dev/null 2>&1; then
+    install_app+="ncdu "
+  fi
+
+  if ! echo "$installed_apps" | grep "^eza/" >/dev/null 2>&1; then
+    install_app+="eza "
+  fi
+
+  # set PATH so it includes homelab scripts
+  if [[ -d "$HOMELAB/scripts" ]] ; then
+      PATH="$HOMELAB/scripts:$PATH"
+  fi
+
+  # Create soft link to homelab_aliases
+  if [[ -f "$HOMELAB/config/homelab_aliases" ]] ; then
+      ln -sf $HOMELAB/config/homelab_aliases ~/.homelab_aliases
+  fi
+
+  # Create soft link to nanorc
+  if [[ -f "$HOMELAB/config/nanorc" ]]; then
+      if [[ ! -d "$HOME/.nanobackup" ]] ; then
+          mkdir ~/.nanobackup
+      fi
+      ln -sf $HOMELAB/config/nanorc ~/.nanorc
+  fi
+
+  # add our homelab aliases
+  if [[ -f "$HOME/.homelab_aliases" ]]; then
+      . ~/.homelab_aliases
+  fi
+
+  # Create soft link to ssh_config
+  if [[ -f "$HOME/homelab/config/ssh_config" ]] ; then
+      if [[ ! -d "$HOME/.ssh" ]]; then
+        mkdir -p "$HOME/.ssh" 
+      fi
+      ln -sf ~/homelab/config/ssh_config ~/.ssh/config
+  fi
+
+  # Install missing packages
+  if [[ -n "$install_app" ]]; then
+      sudo $packageManager update
+      sudo $packageManager install $install_app
+  fi
+
+  # Show system info
+  screenfetch -n
+
+  # Check filesystem usage
+  if [[ -f "$HOMELAB/scripts/check-freespace.sh" ]]; then
+    echo
+    $HOMELAB/scripts/check-freespace.sh 75
+  fi
+fi
+
+# Merge custom themes
+# cp $HOMELAB/poshthemes/* ~/.poshthemes
+
+# Make the prompt fancy
+#eval "$(oh-my-posh init bash --config ~/.poshthemes/stelbent-compact.minimal.omp.json)"
+source $HOMELAB/scripts/.git-prompt.sh
+GIT_PS1_SHOWDIRTYSTATE=yes
+GIT_PS1_SHOWUNTRACKEDFILES=yes
+GIT_PS1_SHOWUPSTREAM=auto
+GIT_PS1_SHOWCONFLICTSTATE=yes
+PROMPT_COMMAND='PS1_CMD1=$(__git_ps1 " (%s) ")'
+PS1='\n\[\e[33m\]╭\[\e[0;43m\] \[\e[30m\]\u@\H \[\e[0m\]\[\e[33;44m\]${PS1_CMD1}\[\e[0m\] \[\e[97;48;5;232m\]\w\[\e[0m\] \n\[\e[33m\]╰\[\e[0m\] \d \T > '
+
+# Report location
+echo Welcome to $(curl --silent ipinfo.io/city)!
